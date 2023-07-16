@@ -1,7 +1,20 @@
 package com.example.project2_todolistapp
 
+import android.os.Binder
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import androidx.room.Room
+import com.example.project2_todolistapp.databinding.ActivityMainBinding
+import com.example.project2_todolistapp.databinding.BottomSheetBinding
+import com.example.project2_todolistapp.databinding.TodoListItemBinding
+import com.example.project2_todolistapp.db.Todo
+import com.example.project2_todolistapp.db.TodoListDatabase
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import java.util.Date
+import kotlin.concurrent.thread
 
 // TODO 4: Create a ViewHolder for the Recycler View
 // TODO 5: Create an Adapter for the Recycler View
@@ -24,8 +37,83 @@ import android.os.Bundle
 // 9. Add new screen to display the tasks that are done
 
 class MainActivity : AppCompatActivity() {
+    private lateinit var binding: ActivityMainBinding
+    private lateinit var database: TodoListDatabase
+    private lateinit var adapter: TodoListAdapter
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        adapter = TodoListAdapter(mutableListOf())
+        binding.rvToDoList.layoutManager =
+            LinearLayoutManager(this@MainActivity, RecyclerView.VERTICAL, false)
+        binding.rvToDoList.adapter = adapter
+
+        binding.fabAddTodo.setOnClickListener {
+            showBottomSheet()
+        }
+
+        // create a random To-do, push this in my db
+        thread {
+            database = Room.databaseBuilder(
+                this@MainActivity,
+                TodoListDatabase::class.java,
+                "todoListDB"
+            ).build()
+            val listOfTodos = database.todoDao().fetchAllTodos()
+            adapter.updateData(listOfTodos)
+        }
+//        binding.searchView.setOnClickListener {
+//            thread {
+//                val searchElements =
+//                    database.todoDao().fetchSearchedTodos(binding.searchView.query.toString())
+//                adapter.updateData(searchElements)
+//            }
+//        }
+        binding.fabDelete.setOnClickListener {
+            deleteIt()
+        }
+    }
+
+    private fun deleteIt(){
+        val listOfTodo= mutableListOf<Todo>()
+        runOnUiThread { Runnable {
+            database.todoDao().deleteAll()
+
+
+            val listOfTodo = database.todoDao().fetchAllTodos()
+        } }
+        adapter.updateData(listOfTodo)
+    }
+
+    private fun showBottomSheet() {
+        val bottomSheet = BottomSheetBinding.inflate(layoutInflater)
+        val dialog = BottomSheetDialog(this)
+        dialog.setContentView(bottomSheet.root)
+
+        bottomSheet.btn.setOnClickListener {
+            // Add to-do in the db
+            if (bottomSheet.tietTitle.text.isNullOrBlank()) {
+                bottomSheet.tielTitle.error = "Cannot be Empty"
+                return@setOnClickListener
+            }
+            if (bottomSheet.tietDesc.text.isNullOrBlank()) {
+                bottomSheet.tielDesc.error = "Cannot be Empty"
+                return@setOnClickListener
+            }
+            val todo = Todo(
+                title = bottomSheet.tietTitle.text.toString(),
+                desc = bottomSheet.tietDesc.text.toString(),
+                date = Date(System.currentTimeMillis())
+            )
+            adapter.addNewItem(todo)
+            thread {
+                database.todoDao().insertTodo(todo)
+            }
+            dialog.dismiss()
+        }
+        dialog.show()
     }
 }
